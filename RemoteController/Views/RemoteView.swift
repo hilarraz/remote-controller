@@ -193,6 +193,9 @@ struct RemoteView: View {
                     .popover(isPresented: $showingApps, arrowEdge: .bottom) {
                         AppsView(model: model) { showingApps = false }
                     }
+                RemoteKey(systemImage: "cone.fill", label: "Lire le lien copié avec VLC (V)", size: 40, tint: .orange) {
+                    model.playClipboardInVLC()
+                }
                 RemoteKey(systemImage: "goforward.10", label: "Avancer de 10 s", size: 40) { model.skip(10) }
             }
         }

@@ -37,28 +37,105 @@ struct NowPlayingCard: View {
                 transportControls
             }
 
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-                if let duration = item.duration, let elapsed = item.elapsed(at: context.date) {
-                    let position = scrubPosition ?? elapsed
-                    VStack(spacing: 2) {
-                        ScrubBar(value: elapsed, total: duration, canSeek: item.canSeek, dragValue: $scrubPosition) {
-                            model.nowPlaying.seek(to: $0)
-                        }
-                        HStack {
-                            Text(Self.format(position))
-                            Spacer()
-                            Text("-" + Self.format(max(duration - position, 0)))
-                        }
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                    }
-                }
+            if item.duration != nil && item.elapsedTime != nil {
+                timeline
+                    .overlay(alignment: .bottom) { trackButtons }
+            } else {
+                trackButtons
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
         .padding(12)
         .glassEffect(.regular, in: .rect(cornerRadius: 20))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Lecture en cours")
+    }
+
+    private var timeline: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            if let duration = item.duration, let elapsed = item.elapsed(at: context.date) {
+                let position = scrubPosition ?? elapsed
+                VStack(spacing: 2) {
+                    ScrubBar(value: elapsed, total: duration, canSeek: item.canSeek, dragValue: $scrubPosition) {
+                        model.nowPlaying.seek(to: $0)
+                    }
+                    HStack {
+                        Text(Self.format(position))
+                        Spacer()
+                        Text("-" + Self.format(max(duration - position, 0)))
+                    }
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    // MARK: Audio and subtitles
+
+    private var isVLC: Bool { item.appBundleID == RemoteModel.vlcBundleID }
+
+    /// Track menus when the app publishes its tracks; VLC only lets us open its own panel.
+    @ViewBuilder private var trackButtons: some View {
+        HStack(spacing: 6) {
+            if isVLC && item.audioOptions.isEmpty && item.subtitleOptions.isEmpty {
+                Button("Pistes", systemImage: "captions.bubble") { model.openVLCTrackSelection() }
+                    .help("Ouvrir « Sélection de piste » de VLC sur la TV (audio et sous-titres)")
+            }
+            if !item.audioOptions.isEmpty {
+                Menu {
+                    Picker("Audio", selection: audioSelection) {
+                        ForEach(item.audioOptions, id: \.self) { option in
+                            Text(option.title).tag(Optional(option))
+                        }
+                    }
+                    .pickerStyle(.inline)
+                } label: {
+                    Image(systemName: "waveform")
+                }
+                .help("Piste audio")
+            }
+
+            if !item.subtitleOptions.isEmpty {
+                Menu {
+                    Picker("Sous-titres", selection: subtitleSelection) {
+                        if item.subtitlesCanBeOff {
+                            Text("Désactivés").tag(LanguageOption?.none)
+                        }
+                        ForEach(item.subtitleOptions, id: \.self) { option in
+                            Text(option.title).tag(Optional(option))
+                        }
+                    }
+                    .pickerStyle(.inline)
+                } label: {
+                    Image(systemName: item.selectedSubtitle == nil ? "captions.bubble" : "captions.bubble.fill")
+                }
+                .help("Sous-titres")
+            }
+        }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.borderless)
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+
+    private var audioSelection: Binding<LanguageOption?> {
+        Binding(get: { item.selectedAudio }, set: { option in
+            if let option { model.nowPlaying.select(option) }
+        })
+    }
+
+    private var subtitleSelection: Binding<LanguageOption?> {
+        Binding(get: { item.selectedSubtitle }, set: { option in
+            if let option {
+                model.nowPlaying.select(option)
+            } else {
+                model.nowPlaying.turnOffSubtitles()
+            }
+        })
     }
 
     @ViewBuilder private var transportControls: some View {

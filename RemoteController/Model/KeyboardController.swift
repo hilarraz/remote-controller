@@ -74,6 +74,7 @@ final class KeyboardController {
             "/": { self.model.openSearch() },
             "k": { NotificationCenter.default.post(name: .showKeyboardRequested, object: nil) },
             "a": { NotificationCenter.default.post(name: .showAppsRequested, object: nil) },
+            "v": { self.model.playClipboardInVLC() },
         ]
         guard let key = event.charactersIgnoringModifiers, let action = actions[key] else { return false }
         // Only skipping makes sense on key repeat.

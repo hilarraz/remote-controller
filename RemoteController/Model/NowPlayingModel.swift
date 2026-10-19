@@ -18,6 +18,13 @@ final class NowPlayingModel {
         /// Moment `elapsedTime` was measured, to extrapolate progress while playing.
         var timestamp = Date()
         var canSeek = false
+        var appBundleID: String?
+        /// Audio tracks and subtitles, when the app publishes them.
+        var audioOptions: [LanguageOption] = []
+        var subtitleOptions: [LanguageOption] = []
+        var selectedAudio: LanguageOption?
+        var selectedSubtitle: LanguageOption?
+        var subtitlesCanBeOff = false
 
         var isPlaying: Bool { playbackRate > 0 }
 
@@ -61,6 +68,21 @@ final class NowPlayingModel {
         session.seek(to: position)
         item?.elapsedTime = position
         item?.timestamp = Date()
+    }
+
+    /// Switches to an audio track or subtitle offered by the app.
+    func select(_ option: LanguageOption) {
+        session?.setLanguageOption(option, enabled: true)
+        switch option.kind {
+        case .audio: item?.selectedAudio = option
+        case .subtitles: item?.selectedSubtitle = option
+        }
+    }
+
+    func turnOffSubtitles() {
+        guard let subtitle = item?.selectedSubtitle else { return }
+        session?.setLanguageOption(subtitle, enabled: false)
+        item?.selectedSubtitle = nil
     }
 
     private func open() {
@@ -129,8 +151,23 @@ final class NowPlayingModel {
             elapsedTime: info.elapsedTime,
             playbackRate: info.playbackRate,
             timestamp: info.elapsedTimestamp ?? Date(),
-            canSeek: info.canSeek
+            canSeek: info.canSeek,
+            appBundleID: info.appBundleID
         )
+        for group in info.languageGroups {
+            let selected = group.options.first { option in info.currentLanguageOptions.contains { $0.matches(option) } }
+            switch group.kind {
+            case .audio:
+                item?.audioOptions += group.options
+                item?.selectedAudio = item?.selectedAudio ?? selected
+            case .subtitles:
+                item?.subtitleOptions += group.options
+                item?.selectedSubtitle = item?.selectedSubtitle ?? selected
+                if group.allowsEmptySelection { item?.subtitlesCanBeOff = true }
+            case nil:
+                break
+            }
+        }
 
         if artwork == nil, let url = info.artworkURL, let key {
             Task {

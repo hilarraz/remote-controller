@@ -75,7 +75,7 @@ import Testing
         }
     }
 
-    @Test func reportsThePlayingItem() {
+    @Test func reportsThePlayingItem() throws {
         let tracker = NowPlayingTracker()
         _ = tracker.handle(protocolMessage(type: 46, field: 50) { inner in
             inner.message(1) { $0.string(2, "com.apple.TVMusic") }
@@ -117,6 +117,48 @@ import Testing
             playerPath(&defaults, field: 9)
         }, type: 72)
         #expect(tracker.current?.canSeek == true)
+
+        // The answer to our queue request adds the audio tracks and subtitles.
+        func option(_ writer: inout ProtoWriter, type: UInt64, tag: String, name: String) {
+            writer.message(3) { language in
+                language.uint(1, type)
+                language.string(2, tag)
+                language.string(4, name)
+                language.string(5, "\(type)-\(tag)")
+            }
+        }
+        _ = tracker.handle(protocolMessage(type: 4, field: 9) { state in
+            state.message(3) { queue in
+                queue.message(2) { item in
+                    item.string(1, "item-1")
+                    item.message(5) { group in
+                        option(&group, type: 0, tag: "fr", name: "Français")
+                        option(&group, type: 0, tag: "ja", name: "Japonais")
+                    }
+                    item.message(5) { group in
+                        group.bool(1, true)
+                        option(&group, type: 1, tag: "fr", name: "Français")
+                    }
+                    item.message(6) { language in
+                        language.uint(1, 0)
+                        language.string(5, "0-ja")
+                    }
+                }
+            }
+            state.message(10) { $0.int(1, 0) }
+            playerPath(&state, field: 9)
+        }, type: 4)
+        let groups = tracker.current?.languageGroups ?? []
+        #expect(groups.map(\.kind) == [.audio, .subtitles])
+        #expect(groups.first?.options.map(\.title) == ["Français", "Japonais"])
+        #expect(groups.last?.allowsEmptySelection == true)
+        #expect(tracker.current?.currentLanguageOptions.map(\.identifier) == ["0-ja"])
+        #expect(tracker.current?.title == "Benef")
+
+        let japanese = try #require(groups.first?.options.last)
+        let command = try #require(ProtoMessage(MRPMessages.languageCommand(japanese, enable: true))?.message(6))
+        #expect(command.uint(1) == 53)
+        #expect(command.message(2)?.message(27)?.string(5) == "0-ja")
 
         // Pausing keeps the item but stops the progress.
         _ = tracker.handle(protocolMessage(type: 4, field: 9) { state in

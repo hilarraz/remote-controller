@@ -24,6 +24,7 @@ struct RemoteApp: App {
             CommandGroup(replacing: .newItem) {}
             CommandMenu("Apple TV") {
                 Button("Coller sur l'Apple TV") { model.pasteClipboard() }
+                Button("Lire le lien copié avec VLC") { model.playClipboardInVLC() }
                 Button("Afficher le clavier") {
                     NotificationCenter.default.post(name: .showKeyboardRequested, object: nil)
                 }

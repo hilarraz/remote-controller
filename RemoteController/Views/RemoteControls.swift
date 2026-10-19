@@ -7,6 +7,7 @@ struct RemoteKey: View {
     let systemImage: String
     let label: String
     var size: CGFloat = 54
+    var tint: Color?
     let onPress: () -> Void
     let onRelease: () -> Void
 
@@ -16,6 +17,7 @@ struct RemoteKey: View {
     var body: some View {
         Image(systemName: systemImage)
             .font(.system(size: size * 0.34, weight: .semibold))
+            .foregroundStyle(tint ?? .primary)
             .frame(width: size, height: size)
             .contentShape(Circle())
             .glassEffect(.regular.interactive(), in: Circle())
@@ -57,8 +59,8 @@ extension RemoteKey {
     }
 
     /// A key performing a single action on release.
-    init(systemImage: String, label: String, size: CGFloat = 54, action: @escaping () -> Void) {
-        self.init(systemImage: systemImage, label: label, size: size, onPress: {}, onRelease: action)
+    init(systemImage: String, label: String, size: CGFloat = 54, tint: Color? = nil, action: @escaping () -> Void) {
+        self.init(systemImage: systemImage, label: label, size: size, tint: tint, onPress: {}, onRelease: action)
     }
 }
 

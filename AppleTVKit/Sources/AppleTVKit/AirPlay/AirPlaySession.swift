@@ -96,7 +96,7 @@ public final class NowPlayingSession: @unchecked Sendable {
         self.endpoint = endpoint
         self.credentials = credentials
         self.identity = identity
-        tracker.requestArtwork = { [weak self] location in self?.requestArtwork(location: location) }
+        tracker.requestItem = { [weak self] location in self?.requestQueueItem(location: location) }
     }
 
     public func start() async throws {
@@ -206,6 +206,15 @@ public final class NowPlayingSession: @unchecked Sendable {
     /// Jumps to a position (in seconds) in what is playing.
     public func seek(to position: Double) {
         send(MRPMessages.seek(to: position))
+    }
+
+    /// Turns on an audio track or subtitle (`enable`), or turns a subtitle off.
+    public func setLanguageOption(_ option: LanguageOption, enabled: Bool) {
+        send(MRPMessages.languageCommand(option, enable: enabled))
+        // Apps do not always announce the new selection: read it back.
+        queue.asyncAfter(deadline: .now() + 0.8) {
+            if let location = self.tracker.currentLocation { self.requestQueueItem(location: location) }
+        }
     }
 
     private func finish(_ error: Error?) {
@@ -378,7 +387,7 @@ public final class NowPlayingSession: @unchecked Sendable {
         }
     }
 
-    private func requestArtwork(location: Int) {
+    private func requestQueueItem(location: Int) {
         send(MRPMessages.playbackQueueRequest(location: location))
     }
 }

@@ -259,6 +259,7 @@ final class RemoteModel {
         client?.touch(x: x, y: y, phase: phase)
     }
 
+
     func skip(_ seconds: Double) {
         guard let client else { return notConnected() }
         client.send(.skipBy, [("_skpS", .float(seconds))])
@@ -402,6 +403,72 @@ final class RemoteModel {
         }
     }
 
+    // MARK: VLC
+
+    static let vlcBundleID = "org.videolan.vlc-ios"
+
+    /// Plays the link in the Mac clipboard with VLC on the Apple TV.
+    func playClipboardInVLC() {
+        guard let url = Self.streamURL(in: NSPasteboard.general.string(forType: .string)) else {
+            NSSound.beep()
+            return showToast("Le presse-papiers ne contient pas de lien à lire.")
+        }
+        guard client != nil else { return notConnected() }
+        Task {
+            do {
+                try await playInVLC(url)
+                showToast("Lecture dans VLC…")
+            } catch {
+                NSSound.beep()
+                showToast(error.localizedDescription)
+            }
+        }
+    }
+
+    /// VLC does not publish its tracks to the system: opens its own "Track selection"
+    /// panel on the TV instead (audio on the left, subtitles on the right), to be browsed
+    /// with the remote. In VLC 3.7's player, "down" opens a panel whose tabs are
+    /// [Chapters,] Track selection, Playback, Media info: from the tab bar, going to the
+    /// last tab then two to the left lands on Track selection whether Chapters is shown
+    /// or not.
+    func openVLCTrackSelection() {
+        guard let client else { return notConnected() }
+        Task {
+            let keys: [HIDCommand] = [.down, .up, .up, .up, .right, .right, .right, .left, .left, .down]
+            for (index, key) in keys.enumerated() {
+                client.send(key, pressed: true)
+                client.send(key, pressed: false)
+                // Leave time for the panel to appear and for each tab to load.
+                try? await Task.sleep(for: .milliseconds(index == 0 ? 900 : 300))
+            }
+        }
+    }
+
+    /// Opens VLC's x-callback-url, which makes it play the link right away, as if it had
+    /// been typed into "Network Stream".
+    func playInVLC(_ url: URL) async throws {
+        let client = try await connectedClient()
+        let known = AppCatalog.shared.knownApps
+        if !known.isEmpty, !known.contains(where: { $0.bundleID == Self.vlcBundleID }) {
+            throw RemoteError(message: "VLC n'est pas installée sur l'Apple TV.")
+        }
+        try await client.open(url: Self.vlcURL(for: url))
+    }
+
+    /// The link in a copied text, when it looks like something VLC can open.
+    static func streamURL(in text: String?) -> URL? {
+        guard let text = text?.trimmingCharacters(in: .whitespacesAndNewlines),
+              text.range(of: #"^[A-Za-z][A-Za-z0-9+.-]*://\S[^\r\n]*$"#, options: .regularExpression) != nil else { return nil }
+        return URL(string: text)
+    }
+
+    static func vlcURL(for url: URL) -> String {
+        // VLC decodes the parameter when it starts with an encoded "://".
+        let unreserved = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+        let encoded = url.absoluteString.addingPercentEncoding(withAllowedCharacters: unreserved) ?? url.absoluteString
+        return "vlc-x-callback://x-callback-url/stream?url=\(encoded)"
+    }
+
     func clearText() {
         guard let client else { return notConnected() }
         textSession?.text = ""
@@ -423,6 +490,12 @@ final class RemoteModel {
             if !Task.isCancelled { toast = nil }
         }
     }
+}
+
+/// An error with a message for the user.
+struct RemoteError: LocalizedError {
+    let message: String
+    var errorDescription: String? { message }
 }
 
 extension Notification.Name {

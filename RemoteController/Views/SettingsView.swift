@@ -126,6 +126,7 @@ private struct ShortcutList: View {
         ("/", "Rechercher"),
         ("K", "Clavier"),
         ("A", "Apps"),
+        ("V", "Lire le lien copié avec VLC"),
         ("⌘V", "Coller le presse-papiers sur l'Apple TV"),
     ]
 

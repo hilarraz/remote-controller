@@ -42,6 +42,8 @@ enum MRPMessages {
     /// Values of pyatv's `Command` enum (CommandInfo.proto).
     enum Command {
         static let seekToPlaybackPosition = 45
+        static let enableLanguageOption = 53
+        static let disableLanguageOption = 54
     }
 
     private static func message(type: Int, inner: (field: Int, build: (inout ProtoWriter) -> Void)? = nil) -> Data {
@@ -101,12 +103,20 @@ enum MRPMessages {
         }))
     }
 
+    static func languageCommand(_ option: LanguageOption, enable: Bool) -> Data {
+        message(type: Kind.sendCommand, inner: (Extension.sendCommand, { command in
+            command.uint(1, UInt64(enable ? Command.enableLanguageOption : Command.disableLanguageOption))
+            command.message(2) { $0.bytes(27, option.encoded) } // options.languageOption
+        }))
+    }
+
     static func playbackQueueRequest(location: Int) -> Data {
         message(type: Kind.playbackQueueRequest, inner: (Extension.playbackQueueRequest, { request in
             request.int(1, Int64(location))
             request.int(2, 1)
             request.double(4, -1)
             request.double(5, 600)
+            request.bool(9, true) // includeLanguageOptions
             request.bool(13, true)
         }))
     }
@@ -130,16 +140,48 @@ public struct NowPlayingInfo: Sendable, Equatable {
     public var artworkData: Data?
     /// Whether the playing app accepts `NowPlayingSession.seek(to:)`.
     public var canSeek: Bool
+    /// Audio tracks and subtitles offered by the app; empty when it does not publish them.
+    public var languageGroups: [LanguageOptionGroup] = []
+    public var currentLanguageOptions: [LanguageOption] = []
 }
 
 /// Tracks clients (apps), their players and play queues from MRP messages, like
 /// pyatv's PlayerStateManager.
 final class NowPlayingTracker {
+    private struct Item {
+        var identifier: String
+        var metadata: ProtoMessage
+        var artwork: Data?
+        var languageGroups: [LanguageOptionGroup]?
+        var currentLanguages: [LanguageOption]?
+
+        init(_ message: ProtoMessage) {
+            identifier = message.string(1) ?? ""
+            metadata = message.message(2) ?? ProtoMessage()
+            artwork = message.bytes(3)
+            let groups = message.messages(5).map(LanguageOptionGroup.init)
+            if !groups.isEmpty {
+                languageGroups = groups
+                // Only meaningful alongside the groups: an empty list then means "nothing selected".
+                currentLanguages = message.bytesList(6).compactMap(LanguageOption.init)
+            }
+        }
+
+        mutating func merge(_ update: Item) {
+            metadata.merge(update.metadata)
+            if let artwork = update.artwork { self.artwork = artwork }
+            if let groups = update.languageGroups {
+                languageGroups = groups
+                currentLanguages = update.currentLanguages
+            }
+        }
+    }
+
     private final class Player {
         var playbackState: Int?
         /// Command number → enabled; nil until the player announced its commands.
         var supportedCommands: [Int: Bool]?
-        var items: [(identifier: String, metadata: ProtoMessage, artwork: Data?)] = []
+        var items: [Item] = []
         var location = 0
     }
 
@@ -158,10 +200,14 @@ final class NowPlayingTracker {
     private var clients: [String: Client] = [:]
     private var activeClientID: String?
     private var artworkRequested: Set<String> = []
+    private var languagesRequested: Set<String> = []
     private(set) var current: NowPlayingInfo?
+    /// Queue location of the playing item.
+    private(set) var currentLocation: Int?
 
-    /// Asks the session to fetch artwork for the item at a queue location.
-    var requestArtwork: ((Int) -> Void)?
+    /// Asks the session to fetch the item at a queue location again, with its artwork
+    /// and language options.
+    var requestItem: ((Int) -> Void)?
 
     private func client(_ bundleID: String) -> Client {
         if let client = clients[bundleID] { return client }
@@ -191,11 +237,9 @@ final class NowPlayingTracker {
             if let playbackState = state.uint(6) { player.playbackState = Int(playbackState) }
             if let commands = state.message(2) { player.supportedCommands = Self.commands(commands) }
             if let queue = state.message(3) {
-                let items = queue.messages(2).map { item in
-                    (identifier: item.string(1) ?? "", metadata: item.message(2) ?? ProtoMessage(), artwork: item.bytes(3))
-                }
-                // A queue answering our artwork request only carries artwork: merge it.
-                if state.has(10) || items.allSatisfy({ $0.artwork != nil && $0.metadata.fields.isEmpty }) {
+                let items = queue.messages(2).map(Item.init)
+                // A queue answering our request may only carry artwork or languages: merge it.
+                if state.has(10) || items.allSatisfy({ $0.metadata.fields.isEmpty }) {
                     merge(items, into: player)
                 } else {
                     player.items = items
@@ -205,10 +249,7 @@ final class NowPlayingTracker {
         case K.updateContentItem, K.updateContentItemArtwork:
             let field = type == K.updateContentItem ? E.updateContentItem : E.updateContentItemArtwork
             guard let update = message.message(field) else { return false }
-            let items = update.messages(1).map { item in
-                (identifier: item.string(1) ?? "", metadata: item.message(2) ?? ProtoMessage(), artwork: item.bytes(3))
-            }
-            merge(items, into: player(at: update.message(2)))
+            merge(update.messages(1).map(Item.init), into: player(at: update.message(2)))
         case K.setDefaultSupportedCommands:
             guard let inner = message.message(E.setDefaultSupportedCommands) else { return false }
             client(inner.message(9)?.message(2)?.string(2) ?? "").defaultCommands = Self.commands(inner.message(2))
@@ -249,11 +290,10 @@ final class NowPlayingTracker {
         return commands
     }
 
-    private func merge(_ updates: [(identifier: String, metadata: ProtoMessage, artwork: Data?)], into player: Player) {
+    private func merge(_ updates: [Item], into player: Player) {
         for update in updates {
             guard let index = player.items.firstIndex(where: { $0.identifier == update.identifier }) else { continue }
-            player.items[index].metadata.merge(update.metadata)
-            if let artwork = update.artwork { player.items[index].artwork = artwork }
+            player.items[index].merge(update)
         }
     }
 
@@ -265,6 +305,7 @@ final class NowPlayingTracker {
     }
 
     private func makeInfo() -> NowPlayingInfo? {
+        currentLocation = nil
         guard let clientID = activeClientID, let client = clients[clientID],
               let player = client.activePlayer, player.items.indices.contains(player.location) else { return nil }
         // Playing or paused only; stopped players have nothing to show.
@@ -301,10 +342,15 @@ final class NowPlayingTracker {
         let seek = MRPMessages.Command.seekToPlaybackPosition
         let canSeek = player.supportedCommands?[seek] ?? client.defaultCommands[seek] ?? false
 
-        // Artwork without a URL has to be requested through the playback queue.
-        if artworkURL == nil, item.artwork == nil, metadata.bool(19) == true, !artworkRequested.contains(item.identifier) {
-            artworkRequested.insert(item.identifier)
-            requestArtwork?(player.location)
+        // Artwork without a URL and language options have to be requested through the
+        // playback queue.
+        currentLocation = player.location
+        let needsArtwork = artworkURL == nil && item.artwork == nil && metadata.bool(19) == true
+            && artworkRequested.insert(item.identifier).inserted
+        let needsLanguages = item.languageGroups == nil && metadata.bool(22) == true
+            && languagesRequested.insert(item.identifier).inserted
+        if needsArtwork || needsLanguages {
+            requestItem?(player.location)
         }
 
         return NowPlayingInfo(
@@ -320,7 +366,9 @@ final class NowPlayingTracker {
             itemIdentifier: item.identifier,
             artworkURL: artworkURL,
             artworkData: item.artwork,
-            canSeek: canSeek
+            canSeek: canSeek,
+            languageGroups: item.languageGroups ?? [],
+            currentLanguageOptions: item.currentLanguages ?? []
         )
     }
 }

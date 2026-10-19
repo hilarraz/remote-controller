@@ -7,10 +7,12 @@ Télécommande Apple TV native pour macOS (Swift / SwiftUI), inspirée de l'app 
 - Saisie de texte en direct dans le champ actif de l'Apple TV, bouton Coller
 - Notification quand l'Apple TV attend du texte alors que la télécommande n'est pas à l'écran : on y répond pour écrire sur la TV, ou on clique pour ouvrir le clavier
 - Raccourci global (⌃⌥V par défaut) pour coller le presse-papiers du Mac sur l'Apple TV depuis n'importe quelle app
-- Raccourcis clavier quand la fenêtre est active (flèches, ↩, ⎋, Espace, H, J/L, +/−, /, K, A, ⌘V)
+- Raccourcis clavier quand la fenêtre est active (flèches, ↩, ⎋, Espace, H, J/L, +/−, /, K, A, V, ⌘V)
+- Bouton VLC (plot orange, touche V) : lit le lien copié sur le Mac avec VLC sur l'Apple TV
 - Lanceur d'apps avec icônes et favoris (clic droit), affichés aussi sous les boutons de la télécommande
 - Lecture en cours : titre, artiste/série, pochette, progression (cliquer ou glisser pour changer de position), précédent/suivant
-- Actions pour Raccourcis, Spotlight et Siri : ouvrir une app, lecture/pause, coller, écrire, veille/réveil, appuyer sur un bouton
+- Pistes audio et sous-titres : menus sur le Mac pour les apps qui publient leurs pistes (app TV…) ; pour VLC, qui ne les publie pas, ouverture de son panneau « Sélection de piste » sur la TV
+- Actions pour Raccourcis, Spotlight et Siri : ouvrir une app, lecture/pause, coller, lire avec VLC, écrire, veille/réveil, appuyer sur un bouton
 - Fenêtre + icône dans la barre des menus
 
 ## Compiler et lancer

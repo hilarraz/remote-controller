@@ -157,6 +157,14 @@ struct ProtoMessage {
         bytes(field).flatMap(ProtoMessage.init)
     }
 
+    /// Raw values of a repeated length-delimited field.
+    func bytesList(_ field: Int) -> [Data] {
+        (fields[field] ?? []).compactMap { value in
+            if case .bytes(let data) = value { return data }
+            return nil
+        }
+    }
+
     func messages(_ field: Int) -> [ProtoMessage] {
         (fields[field] ?? []).compactMap { value in
             if case .bytes(let data) = value { return ProtoMessage(data) }

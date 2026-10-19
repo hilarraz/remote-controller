@@ -70,7 +70,7 @@ func run() async {
         return name
     }
     guard let command = args.first else {
-        fail("usage: atvctl [--device NAME] scan|pair|watch|apps|launch ID|text STRING|settext STRING|tistate|swipe DIR|nowplaying|seek SECONDS|on|off|<button>")
+        fail("usage: atvctl [--device NAME] scan|pair|watch|apps|launch ID|openurl URL|text STRING|settext STRING|tistate|swipe DIR|nowplaying|seek SECONDS|on|off|<button>")
     }
     var store = PairingStore.load(from: storeURL, defaultName: Host.current().localizedName ?? "Mac")
 
@@ -114,6 +114,12 @@ func run() async {
         guard args.count > 1 else { fail("usage: atvctl launch BUNDLE_ID") }
         let (client, _) = await connectedClient(store, deviceName: deviceName)
         do { try await client.launch(bundleID: args[1]) } catch { fail("\(error)") }
+        client.disconnect()
+
+    case "openurl":
+        guard args.count > 1 else { fail("usage: atvctl openurl URL") }
+        let (client, _) = await connectedClient(store, deviceName: deviceName)
+        do { try await client.open(url: args[1]) } catch { fail("\(error)") }
         client.disconnect()
 
     case "text", "settext":
@@ -182,6 +188,12 @@ func run() async {
         let session = NowPlayingSession(endpoint: device.airPlayEndpoint, credentials: credentials, identity: store.identity)
         session.updateHandler = { info in
             print("now playing: \(String(describing: info.map { ($0.title, $0.subtitle ?? "-", $0.appName ?? "-", $0.duration ?? -1, $0.elapsedTime ?? -1, $0.isPlaying, $0.canSeek, $0.artworkURL?.absoluteString ?? "-", $0.artworkData?.count ?? 0) }))")
+            for group in info?.languageGroups ?? [] {
+                print("  \(group.kind.map { "\($0)" } ?? "?") (empty allowed: \(group.allowsEmptySelection)): \(group.options.map { "\($0.title) [\($0.languageTag ?? "-") \($0.characteristics)]" })")
+            }
+            if let current = info?.currentLanguageOptions, !current.isEmpty {
+                print("  current: \(current.map { "\($0.kind) \($0.title)" })")
+            }
         }
         session.closeHandler = { error in print("closed: \(String(describing: error))") }
         do {

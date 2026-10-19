@@ -219,6 +219,31 @@ struct TypeOnTVIntent: AppIntent {
     }
 }
 
+// MARK: VLC
+
+struct PlayInVLCIntent: AppIntent {
+    static let title: LocalizedStringResource = "Lire avec VLC sur l'Apple TV"
+    static let description = IntentDescription("Lit un lien (flux, vidéo en ligne…) avec VLC sur l'Apple TV. Sans lien, utilise celui du presse-papiers.")
+
+    @Parameter(title: "Lien")
+    var url: URL?
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("Lire \(\.$url) avec VLC sur l'Apple TV")
+    }
+
+    func perform() async throws -> some IntentResult {
+        let url = url
+        try await RemoteIntentError.run {
+            guard let link = url ?? RemoteModel.streamURL(in: NSPasteboard.general.string(forType: .string)) else {
+                throw RemoteError(message: "Le presse-papiers ne contient pas de lien à lire.")
+            }
+            try await RemoteModel.shared.playInVLC(link)
+        }
+        return .result()
+    }
+}
+
 // MARK: App Shortcuts
 
 /// Actions available in Spotlight and Siri without creating a shortcut first.
@@ -247,6 +272,12 @@ struct RemoteShortcuts: AppShortcutsProvider {
             phrases: ["Coller sur l'Apple TV avec \(.applicationName)"],
             shortTitle: "Coller sur l'Apple TV",
             systemImageName: "doc.on.clipboard"
+        )
+        AppShortcut(
+            intent: PlayInVLCIntent(),
+            phrases: ["Lire le lien copié dans VLC avec \(.applicationName)"],
+            shortTitle: "Lire avec VLC",
+            systemImageName: "cone.fill"
         )
         AppShortcut(
             intent: TypeOnTVIntent(),
