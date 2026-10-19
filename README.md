@@ -5,10 +5,12 @@ Télécommande Apple TV native pour macOS (Swift / SwiftUI), inspirée de l'app 
 - Pavé tactile (glisser à la souris ou à deux doigts sur le trackpad, clic = sélection, clic maintenu = appui long) ou pavé directionnel
 - Boutons Retour, TV, Lecture/Pause, Rechercher, Volume ±, ±10 s, veille/réveil — l'appui long fonctionne comme sur la vraie télécommande
 - Saisie de texte en direct dans le champ actif de l'Apple TV, bouton Coller
+- Notification quand l'Apple TV attend du texte alors que la télécommande n'est pas à l'écran : on y répond pour écrire sur la TV, ou on clique pour ouvrir le clavier
 - Raccourci global (⌃⌥V par défaut) pour coller le presse-papiers du Mac sur l'Apple TV depuis n'importe quelle app
 - Raccourcis clavier quand la fenêtre est active (flèches, ↩, ⎋, Espace, H, J/L, +/−, /, K, A, ⌘V)
-- Lanceur d'apps avec icônes
-- Lecture en cours : titre, artiste/série, pochette, progression, précédent/suivant
+- Lanceur d'apps avec icônes et favoris (clic droit), affichés aussi sous les boutons de la télécommande
+- Lecture en cours : titre, artiste/série, pochette, progression (cliquer ou glisser pour changer de position), précédent/suivant
+- Actions pour Raccourcis, Spotlight et Siri : ouvrir une app, lecture/pause, coller, écrire, veille/réveil, appuyer sur un bouton
 - Fenêtre + icône dans la barre des menus
 
 ## Compiler et lancer
@@ -53,5 +55,7 @@ swift test                              # tests unitaires (encodages, SRP, HTTP,
 swift run atvctl scan                   # liste les Apple TV
 ATVKIT_DEBUG=1 swift run atvctl watch   # affiche tous les messages échangés
 ```
+
+À chaque push sur `main`, GitHub Actions lance les tests et compile l'app (`.github/workflows/ci.yml`).
 
 `atvctl` garde ses propres clés dans `~/.config/atvctl/store.json` (même format que l'app).

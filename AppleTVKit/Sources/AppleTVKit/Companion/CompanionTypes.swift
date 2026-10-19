@@ -88,7 +88,7 @@ public struct TextInputSession: Sendable, Equatable {
     public var placeholder: String?
 }
 
-public struct LaunchableApp: Sendable, Hashable, Identifiable {
+public struct LaunchableApp: Sendable, Hashable, Identifiable, Codable {
     public let bundleID: String
     public let name: String
     public var id: String { bundleID }

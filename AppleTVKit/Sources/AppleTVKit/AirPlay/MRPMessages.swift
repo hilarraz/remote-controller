@@ -4,6 +4,7 @@ import Foundation
 /// pyatv's .proto definitions).
 enum MRPMessages {
     enum Kind {
+        static let sendCommand = 1
         static let setState = 4
         static let deviceInfo = 15
         static let clientUpdatesConfig = 16
@@ -17,10 +18,12 @@ enum MRPMessages {
         static let updateClient = 55
         static let updateContentItem = 56
         static let updateContentItemArtwork = 57
+        static let setDefaultSupportedCommands = 72
     }
 
     /// Field holding the inner message for each message type.
     enum Extension {
+        static let sendCommand = 6
         static let setState = 9
         static let deviceInfo = 20
         static let clientUpdatesConfig = 21
@@ -33,6 +36,12 @@ enum MRPMessages {
         static let updateClient = 59
         static let updateContentItem = 60
         static let updateContentItemArtwork = 61
+        static let setDefaultSupportedCommands = 75
+    }
+
+    /// Values of pyatv's `Command` enum (CommandInfo.proto).
+    enum Command {
+        static let seekToPlaybackPosition = 45
     }
 
     private static func message(type: Int, inner: (field: Int, build: (inout ProtoWriter) -> Void)? = nil) -> Data {
@@ -85,6 +94,13 @@ enum MRPMessages {
         message(type: Kind.getKeyboardSession)
     }
 
+    static func seek(to position: Double) -> Data {
+        message(type: Kind.sendCommand, inner: (Extension.sendCommand, { command in
+            command.uint(1, UInt64(Command.seekToPlaybackPosition))
+            command.message(2) { $0.double(9, position) } // options.playbackPosition
+        }))
+    }
+
     static func playbackQueueRequest(location: Int) -> Data {
         message(type: Kind.playbackQueueRequest, inner: (Extension.playbackQueueRequest, { request in
             request.int(1, Int64(location))
@@ -112,6 +128,8 @@ public struct NowPlayingInfo: Sendable, Equatable {
     public var itemIdentifier: String?
     public var artworkURL: URL?
     public var artworkData: Data?
+    /// Whether the playing app accepts `NowPlayingSession.seek(to:)`.
+    public var canSeek: Bool
 }
 
 /// Tracks clients (apps), their players and play queues from MRP messages, like
@@ -119,6 +137,8 @@ public struct NowPlayingInfo: Sendable, Equatable {
 final class NowPlayingTracker {
     private final class Player {
         var playbackState: Int?
+        /// Command number → enabled; nil until the player announced its commands.
+        var supportedCommands: [Int: Bool]?
         var items: [(identifier: String, metadata: ProtoMessage, artwork: Data?)] = []
         var location = 0
     }
@@ -127,6 +147,8 @@ final class NowPlayingTracker {
         var displayName: String?
         var activePlayerID: String?
         var players: [String: Player] = [:]
+        /// Commands of players that did not announce their own.
+        var defaultCommands: [Int: Bool] = [:]
 
         var activePlayer: Player? {
             players[activePlayerID ?? ""] ?? players["MediaRemote-DefaultPlayer"]
@@ -167,6 +189,7 @@ final class NowPlayingTracker {
             guard let state = message.message(E.setState) else { return false }
             let player = player(at: state.message(9))
             if let playbackState = state.uint(6) { player.playbackState = Int(playbackState) }
+            if let commands = state.message(2) { player.supportedCommands = Self.commands(commands) }
             if let queue = state.message(3) {
                 let items = queue.messages(2).map { item in
                     (identifier: item.string(1) ?? "", metadata: item.message(2) ?? ProtoMessage(), artwork: item.bytes(3))
@@ -186,6 +209,9 @@ final class NowPlayingTracker {
                 (identifier: item.string(1) ?? "", metadata: item.message(2) ?? ProtoMessage(), artwork: item.bytes(3))
             }
             merge(items, into: player(at: update.message(2)))
+        case K.setDefaultSupportedCommands:
+            guard let inner = message.message(E.setDefaultSupportedCommands) else { return false }
+            client(inner.message(9)?.message(2)?.string(2) ?? "").defaultCommands = Self.commands(inner.message(2))
         case K.setNowPlayingClient:
             guard let inner = message.message(E.setNowPlayingClient) else { return false }
             let bundleID = inner.message(1)?.string(2) ?? ""
@@ -212,6 +238,15 @@ final class NowPlayingTracker {
             return false
         }
         return recompute()
+    }
+
+    /// Reads a SupportedCommands message.
+    private static func commands(_ message: ProtoMessage?) -> [Int: Bool] {
+        var commands: [Int: Bool] = [:]
+        for info in message?.messages(1) ?? [] {
+            if let command = info.uint(1) { commands[Int(command)] = info.bool(2) ?? false }
+        }
+        return commands
     }
 
     private func merge(_ updates: [(identifier: String, metadata: ProtoMessage, artwork: Data?)], into player: Player) {
@@ -263,6 +298,9 @@ final class NowPlayingTracker {
         }
         if artworkURL == nil, let url = metadata.string(70) { artworkURL = URL(string: url) }
 
+        let seek = MRPMessages.Command.seekToPlaybackPosition
+        let canSeek = player.supportedCommands?[seek] ?? client.defaultCommands[seek] ?? false
+
         // Artwork without a URL has to be requested through the playback queue.
         if artworkURL == nil, item.artwork == nil, metadata.bool(19) == true, !artworkRequested.contains(item.identifier) {
             artworkRequested.insert(item.identifier)
@@ -281,7 +319,8 @@ final class NowPlayingTracker {
             isPlaying: state == 1 && rate != 0,
             itemIdentifier: item.identifier,
             artworkURL: artworkURL,
-            artworkData: item.artwork
+            artworkData: item.artwork,
+            canSeek: canSeek
         )
     }
 }

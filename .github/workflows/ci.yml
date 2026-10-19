@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md"]
+  pull_request:
+    paths-ignore: ["**.md"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Tests et compilation
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Versions
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Tests AppleTVKit
+        working-directory: AppleTVKit
+        run: swift test
+
+      - name: Compilation de l'app
+        run: >
+          xcodebuild build
+          -project Remote.xcodeproj
+          -scheme Remote
+          -configuration Release
+          -derivedDataPath build/DerivedData
+          CODE_SIGNING_ALLOWED=NO

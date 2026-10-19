@@ -58,6 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             keyboard.start()
             self.keyboard = keyboard
             HotKeyManager.shared.update()
+            TextInputNotifier.shared.start()
         }
     }
 

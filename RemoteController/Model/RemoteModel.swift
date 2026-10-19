@@ -158,6 +158,7 @@ final class RemoteModel {
         client = nil
         nowPlaying.stop()
         textSession = nil
+        TextInputNotifier.shared.dismiss()
         mediaControls = []
         volume = nil
         powerState = .unknown
@@ -185,12 +186,17 @@ final class RemoteModel {
         case .textInputStarted(let session):
             let isNewField = textSession?.sessionUUID != session.sessionUUID
             textSession = session
-            if isNewField { NotificationCenter.default.post(name: .textInputDidStart, object: nil) }
+            if isNewField {
+                NotificationCenter.default.post(name: .textInputDidStart, object: nil)
+                TextInputNotifier.shared.textInputStarted(session, deviceName: selectedDevice?.name ?? "L'Apple TV")
+            }
         case .textInputStopped:
             textSession = nil
+            TextInputNotifier.shared.dismiss()
         case .disconnected:
             client = nil
             textSession = nil
+            TextInputNotifier.shared.dismiss()
             nowPlaying.stop()
             state = .connecting
             reconnect(after: .seconds(1))
@@ -293,15 +299,62 @@ final class RemoteModel {
     }
 
     func loadApps() {
-        guard let client, !isLoadingApps else { return }
-        isLoadingApps = true
+        guard client != nil, !isLoadingApps else { return }
         Task {
-            defer { isLoadingApps = false }
             do {
-                apps = try await client.launchableApps()
+                try await refreshApps()
             } catch {
                 showToast(error.localizedDescription)
             }
+        }
+    }
+
+    /// Fetches the installed apps and remembers them for menus and Shortcuts.
+    @discardableResult
+    func refreshApps() async throws -> [LaunchableApp] {
+        let client = try await connectedClient()
+        isLoadingApps = true
+        defer { isLoadingApps = false }
+        apps = try await client.launchableApps()
+        AppCatalog.shared.update(apps)
+        return apps
+    }
+
+    // MARK: Actions from outside the window (Shortcuts, notifications)
+
+    /// The connected client, waiting a few seconds while a connection is being set up,
+    /// e.g. when a shortcut just launched the app.
+    private func connectedClient(timeout: Duration = .seconds(10)) async throws -> CompanionClient {
+        let deadline = ContinuousClock.now + timeout
+        while true {
+            if state == .connected, let client { return client }
+            guard state != .needsPairing, ContinuousClock.now < deadline else { throw CompanionError.notConnected }
+            try await Task.sleep(for: .milliseconds(200))
+        }
+    }
+
+    func press(_ command: HIDCommand) async throws {
+        try await connectedClient().press(command)
+    }
+
+    func launch(bundleID: String) async throws {
+        try await connectedClient().launch(bundleID: bundleID)
+    }
+
+    func setPower(on: Bool) async throws {
+        let client = try await connectedClient()
+        try await on ? client.turnOn() : client.turnOff()
+    }
+
+    /// Inserts text at the cursor of the focused Apple TV field, or replaces its content.
+    func typeText(_ string: String, replacing: Bool = false) async throws {
+        let client = try await connectedClient()
+        if replacing {
+            try await client.setText(string, refresh: textSession == nil)
+            if textSession != nil { textSession?.text = string }
+        } else {
+            try await client.appendText(string, refresh: textSession == nil)
+            if textSession != nil { textSession?.text += string }
         }
     }
 
@@ -332,12 +385,16 @@ final class RemoteModel {
             NSSound.beep()
             return
         }
-        guard let client else { return notConnected() }
+        insertText(string, confirmation: "Texte collé sur l'Apple TV")
+    }
+
+    /// Inserts text into the focused Apple TV field, reporting errors in the remote.
+    func insertText(_ string: String, confirmation: String? = nil) {
+        guard client != nil else { return notConnected() }
         Task {
             do {
-                try await client.appendText(string, refresh: textSession == nil)
-                if textSession != nil { textSession?.text += string }
-                showToast("Texte collé sur l'Apple TV")
+                try await typeText(string)
+                if let confirmation { showToast(confirmation) }
             } catch {
                 NSSound.beep()
                 showToast(error.localizedDescription)

@@ -70,7 +70,7 @@ func run() async {
         return name
     }
     guard let command = args.first else {
-        fail("usage: atvctl [--device NAME] scan|pair|watch|apps|launch ID|text STRING|settext STRING|tistate|swipe DIR|on|off|<button>")
+        fail("usage: atvctl [--device NAME] scan|pair|watch|apps|launch ID|text STRING|settext STRING|tistate|swipe DIR|nowplaying|seek SECONDS|on|off|<button>")
     }
     var store = PairingStore.load(from: storeURL, defaultName: Host.current().localizedName ?? "Mac")
 
@@ -166,8 +166,14 @@ func run() async {
             fail("AirPlay pairing failed: \(error.localizedDescription) (\(error))")
         }
 
-    case "nowplaying":
+    case "nowplaying", "seek":
         // Uses AirPlay credentials, or tries the Companion ones with --companion.
+        // atvctl seek SECONDS jumps to that position once the playing item is known.
+        var seekPosition: Double?
+        if command == "seek" {
+            guard args.count > 1, let position = Double(args[1]) else { fail("usage: atvctl seek SECONDS") }
+            seekPosition = position
+        }
         let device = await device(named: deviceName)
         let useCompanion = args.contains("--companion")
         guard let credentials = useCompanion ? store.companionCredentials(for: device.id) : store.airPlayCredentials(for: device.id) else {
@@ -175,7 +181,7 @@ func run() async {
         }
         let session = NowPlayingSession(endpoint: device.airPlayEndpoint, credentials: credentials, identity: store.identity)
         session.updateHandler = { info in
-            print("now playing: \(String(describing: info.map { ($0.title, $0.subtitle ?? "-", $0.appName ?? "-", $0.duration ?? -1, $0.elapsedTime ?? -1, $0.isPlaying, $0.artworkURL?.absoluteString ?? "-", $0.artworkData?.count ?? 0) }))")
+            print("now playing: \(String(describing: info.map { ($0.title, $0.subtitle ?? "-", $0.appName ?? "-", $0.duration ?? -1, $0.elapsedTime ?? -1, $0.isPlaying, $0.canSeek, $0.artworkURL?.absoluteString ?? "-", $0.artworkData?.count ?? 0) }))")
         }
         session.closeHandler = { error in print("closed: \(String(describing: error))") }
         do {
@@ -183,6 +189,14 @@ func run() async {
             print("AirPlay session started")
         } catch {
             fail("AirPlay session failed: \(error.localizedDescription) (\(error))")
+        }
+        if let seekPosition {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            print("seeking to \(seekPosition) s")
+            session.seek(to: seekPosition)
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            session.stop()
+            return
         }
         try? await Task.sleep(nanoseconds: 40_000_000_000)
         session.stop()

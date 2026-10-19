@@ -118,6 +118,11 @@ enum RemoteWindows {
     static func contains(_ window: NSWindow) -> Bool {
         windows.contains { $0.window === window }
     }
+
+    /// Whether the user is looking at a remote: the app is active and one is on screen.
+    static var isOnScreen: Bool {
+        NSApp.isActive && windows.contains { $0.window?.occlusionState.contains(.visible) == true }
+    }
 }
 
 extension Notification.Name {

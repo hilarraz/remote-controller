@@ -27,6 +27,14 @@ import Testing
         // A lone message is sent without its length prefix.
         #expect(NowPlayingSession.splitProtobufs(first).first?.uint(1) == 38)
     }
+
+    @Test func encodesSeekCommand() throws {
+        let message = try #require(ProtoMessage(MRPMessages.seek(to: 754.5)))
+        #expect(message.uint(1) == 1)
+        let command = try #require(message.message(6))
+        #expect(command.uint(1) == 45)
+        #expect(command.message(2)?.double(9) == 754.5)
+    }
 }
 
 @Suite struct HTTPMessageTests {
@@ -98,6 +106,17 @@ import Testing
         #expect(info?.duration == 190.6)
         #expect(info?.isPlaying == true)
         #expect(info?.artworkURL?.absoluteString == "https://example.com/600x600bb.jpg")
+        #expect(info?.canSeek == false)
+
+        // Seeking becomes available once the client's default commands allow it.
+        _ = tracker.handle(protocolMessage(type: 72, field: 75) { defaults in
+            defaults.message(2) { commands in
+                commands.message(1) { $0.uint(1, 45); $0.bool(2, true) }
+                commands.message(1) { $0.uint(1, 46); $0.bool(2, false) }
+            }
+            playerPath(&defaults, field: 9)
+        }, type: 72)
+        #expect(tracker.current?.canSeek == true)
 
         // Pausing keeps the item but stops the progress.
         _ = tracker.handle(protocolMessage(type: 4, field: 9) { state in

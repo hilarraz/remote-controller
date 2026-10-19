@@ -17,6 +17,7 @@ final class NowPlayingModel {
         var playbackRate: Double = 0
         /// Moment `elapsedTime` was measured, to extrapolate progress while playing.
         var timestamp = Date()
+        var canSeek = false
 
         var isPlaying: Bool { playbackRate > 0 }
 
@@ -51,6 +52,15 @@ final class NowPlayingModel {
         session = nil
         device = nil
         item = nil
+    }
+
+    /// Jumps to a position in seconds; the progress moves right away, before the Apple
+    /// TV confirms.
+    func seek(to position: Double) {
+        guard let session, item?.canSeek == true else { return }
+        session.seek(to: position)
+        item?.elapsedTime = position
+        item?.timestamp = Date()
     }
 
     private func open() {
@@ -118,7 +128,8 @@ final class NowPlayingModel {
             duration: info.duration,
             elapsedTime: info.elapsedTime,
             playbackRate: info.playbackRate,
-            timestamp: info.elapsedTimestamp ?? Date()
+            timestamp: info.elapsedTimestamp ?? Date(),
+            canSeek: info.canSeek
         )
 
         if artwork == nil, let url = info.artworkURL, let key {

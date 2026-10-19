@@ -203,6 +203,11 @@ public final class NowPlayingSession: @unchecked Sendable {
         }
     }
 
+    /// Jumps to a position (in seconds) in what is playing.
+    public func seek(to position: Double) {
+        send(MRPMessages.seek(to: position))
+    }
+
     private func finish(_ error: Error?) {
         guard !isClosed else { return }
         isClosed = true

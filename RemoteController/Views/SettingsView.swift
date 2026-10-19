@@ -16,7 +16,7 @@ struct SettingsView: View {
                 ShortcutList()
             }
         }
-        .frame(width: 480, height: 380)
+        .frame(width: 480, height: 460)
     }
 }
 
@@ -26,6 +26,7 @@ private struct GeneralSettings: View {
     @AppStorage("pasteHotKey") private var hotKey = GlobalHotKey.Preset.controlOptionV.rawValue
     @AppStorage("fetchAppIcons") private var fetchAppIcons = true
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
+    @AppStorage(TextInputNotifier.enabledKey) private var notifyTextInput = true
 
     var body: some View {
         Form {
@@ -46,6 +47,14 @@ private struct GeneralSettings: View {
                 .disabled(!hotKeyEnabled)
             } footer: {
                 Text("Envoie le texte du presse-papiers dans le champ actif de l'Apple TV.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("Prévenir quand l'Apple TV attend du texte", isOn: $notifyTextInput)
+            } footer: {
+                Text("Une notification apparaît quand un champ de texte est sélectionné sur l'Apple TV et que la télécommande n'est pas à l'écran. Répondez-y pour écrire sur l'Apple TV.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

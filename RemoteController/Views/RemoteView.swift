@@ -43,6 +43,7 @@ struct RemoteView: View {
             if model.isConnected {
                 navigationArea
                 buttons
+                favoritesBar
             } else {
                 ConnectionStatusView(model: model, compact: compact) {
                     if compact { openMainWindow() }
@@ -56,6 +57,7 @@ struct RemoteView: View {
         .animation(.snappy(duration: 0.25), value: model.textSession == nil || keyboardDismissed)
         .animation(.snappy(duration: 0.25), value: model.isConnected)
         .background(WindowRegistrar())
+        .onAppear { MainWindow.openAction = openWindow }
         .onReceive(NotificationCenter.default.publisher(for: .textInputDidStart)) { _ in
             keyboardDismissed = false
         }
@@ -196,6 +198,32 @@ struct RemoteView: View {
         }
     }
 
+    // MARK: Favorites
+
+    /// One-click access to the favorite apps chosen in the app launcher.
+    @ViewBuilder private var favoritesBar: some View {
+        let favorites = AppCatalog.shared.favorites
+        if !favorites.isEmpty {
+            let icons = HStack(spacing: 10) {
+                ForEach(favorites) { app in
+                    Button {
+                        model.launch(app)
+                    } label: {
+                        AppIcon(bundleID: app.bundleID, size: 36)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Ouvrir \(app.name)")
+                    .contextMenu { FavoriteMenu(app: app, showsMoves: true) }
+                }
+            }
+            ViewThatFits(in: .horizontal) {
+                icons
+                ScrollView(.horizontal) { icons }
+                    .scrollIndicators(.never)
+            }
+        }
+    }
+
     // MARK: Toast
 
     @ViewBuilder private var toast: some View {
@@ -214,8 +242,7 @@ struct RemoteView: View {
     }
 
     private func openMainWindow() {
-        openWindow(id: "remote")
-        NSApp.activate()
+        MainWindow.show()
     }
 }
 
