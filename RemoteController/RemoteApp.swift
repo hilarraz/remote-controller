@@ -22,6 +22,9 @@ struct RemoteApp: App {
         .windowBackgroundDragBehavior(.enabled)
         .commands {
             CommandGroup(replacing: .newItem) {}
+            CommandGroup(after: .appInfo) {
+                Button("Rechercher les mises à jour…") { Updater.shared.check(userInitiated: true) }
+            }
             CommandMenu("Apple TV") {
                 Button("Coller sur l'Apple TV") { model.pasteClipboard() }
                 Button("Lire le lien copié avec VLC") { model.playClipboardInVLC() }
@@ -60,6 +63,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.keyboard = keyboard
             HotKeyManager.shared.update()
             TextInputNotifier.shared.start()
+            StatusItemMenu.shared.start()
+            Updater.shared.checkAutomatically()
         }
     }
 

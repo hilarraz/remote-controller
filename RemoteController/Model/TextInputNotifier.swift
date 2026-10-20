@@ -104,11 +104,13 @@ final class TextInputNotifier: NSObject, UNUserNotificationCenterDelegate {
     }
 }
 
-/// Opens the main window from code without a SwiftUI environment (notifications,
-/// Shortcuts). Remote views hand over their `openWindow` action when they appear.
+/// Opens the main window (or the settings) from code without a SwiftUI environment:
+/// notifications, Shortcuts, the menu bar icon's menu. Remote views hand over their
+/// environment actions when they appear.
 @MainActor
 enum MainWindow {
     static var openAction: OpenWindowAction?
+    static var openSettingsAction: OpenSettingsAction?
 
     static func show() {
         if let openAction {

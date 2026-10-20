@@ -24,6 +24,7 @@ struct RemoteView: View {
     @State private var showingApps = false
     @State private var keyboardDismissed = false
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
 
     private var keySize: CGFloat { compact ? 48 : 54 }
 
@@ -57,7 +58,10 @@ struct RemoteView: View {
         .animation(.snappy(duration: 0.25), value: model.textSession == nil || keyboardDismissed)
         .animation(.snappy(duration: 0.25), value: model.isConnected)
         .background(WindowRegistrar())
-        .onAppear { MainWindow.openAction = openWindow }
+        .onAppear {
+            MainWindow.openAction = openWindow
+            MainWindow.openSettingsAction = openSettings
+        }
         .onReceive(NotificationCenter.default.publisher(for: .textInputDidStart)) { _ in
             keyboardDismissed = false
         }

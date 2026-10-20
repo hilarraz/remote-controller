@@ -16,7 +16,7 @@ struct SettingsView: View {
                 ShortcutList()
             }
         }
-        .frame(width: 480, height: 460)
+        .frame(width: 480, height: 540)
     }
 }
 
@@ -27,6 +27,7 @@ private struct GeneralSettings: View {
     @AppStorage("fetchAppIcons") private var fetchAppIcons = true
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
     @AppStorage(TextInputNotifier.enabledKey) private var notifyTextInput = true
+    @AppStorage(Updater.automaticCheckKey) private var checkForUpdates = true
 
     var body: some View {
         Form {
@@ -62,6 +63,17 @@ private struct GeneralSettings: View {
             Section {
                 Toggle("Afficher dans la barre des menus", isOn: $showMenuBarExtra)
                 Toggle("Icônes des apps depuis l'App Store", isOn: $fetchAppIcons)
+            }
+
+            Section {
+                Toggle("Rechercher les mises à jour automatiquement", isOn: $checkForUpdates)
+                LabeledContent("Version \(Updater.currentVersion)") {
+                    Button("Rechercher maintenant") { Updater.shared.check(userInitiated: true) }
+                }
+            } footer: {
+                Text("Les mises à jour viennent des versions publiées sur GitHub, avec le compte connecté par « gh auth login ».")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

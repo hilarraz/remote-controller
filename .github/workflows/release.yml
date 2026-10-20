@@ -1,0 +1,48 @@
+name: Release
+
+# Pushing a tag such as v1.2.0 publishes that version; the app's
+# "Rechercher les mises à jour" installs it. The tag must match MARKETING_VERSION.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publication
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Vérification de la version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          project=$(grep -m1 'MARKETING_VERSION' Remote.xcodeproj/project.pbxproj | sed -E 's/.*= (.*);/\1/')
+          if [ "$version" != "$project" ]; then
+            echo "::error::Le tag $GITHUB_REF_NAME ne correspond pas à MARKETING_VERSION ($project)"
+            exit 1
+          fi
+
+      - name: Tests AppleTVKit
+        working-directory: AppleTVKit
+        run: swift test
+
+      - name: Compilation
+        run: >
+          xcodebuild build
+          -project Remote.xcodeproj
+          -scheme Remote
+          -configuration Release
+          -derivedDataPath build/DerivedData
+
+      - name: Archive
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent build/DerivedData/Build/Products/Release/Remote.app "Remote-${GITHUB_REF_NAME#v}.zip"
+
+      - name: Publication de la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" "Remote-${GITHUB_REF_NAME#v}.zip" --title "Remote ${GITHUB_REF_NAME#v}" --generate-notes

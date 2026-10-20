@@ -13,7 +13,8 @@ Télécommande Apple TV native pour macOS (Swift / SwiftUI), inspirée de l'app 
 - Lecture en cours : titre, artiste/série, pochette, progression (cliquer ou glisser pour changer de position), précédent/suivant
 - Pistes audio et sous-titres : menus sur le Mac pour les apps qui publient leurs pistes (app TV…) ; pour VLC, qui ne les publie pas, ouverture de son panneau « Sélection de piste » sur la TV
 - Actions pour Raccourcis, Spotlight et Siri : ouvrir une app, lecture/pause, coller, lire avec VLC, écrire, veille/réveil, appuyer sur un bouton
-- Fenêtre + icône dans la barre des menus
+- Fenêtre + icône dans la barre des menus ; clic droit sur l'icône : réglages, mises à jour, quitter
+- Mises à jour depuis les releases GitHub du dépôt (automatique une fois par jour, ou clic droit › Rechercher les mises à jour)
 
 ## Compiler et lancer
 
@@ -59,5 +60,12 @@ ATVKIT_DEBUG=1 swift run atvctl watch   # affiche tous les messages échangés
 ```
 
 À chaque push sur `main`, GitHub Actions lance les tests et compile l'app (`.github/workflows/ci.yml`).
+
+## Publier une version
+
+1. Changer `MARKETING_VERSION` dans le projet (par exemple `1.2.0`) et committer.
+2. `git tag v1.2.0 && git push origin main v1.2.0`
+
+GitHub Actions compile l'app et la publie en release (`.github/workflows/release.yml`) ; l'app la propose ensuite d'elle-même. Le dépôt étant privé, l'app lit les releases avec le compte connecté par `gh auth login` sur le Mac.
 
 `atvctl` garde ses propres clés dans `~/.config/atvctl/store.json` (même format que l'app).
