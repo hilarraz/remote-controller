@@ -51,6 +51,10 @@ struct RemoteView: View {
                 }
                 .frame(maxHeight: .infinity)
             }
+
+            Text("Version \(Updater.currentVersion)")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
         .padding(compact ? 14 : 18)
         .frame(maxHeight: .infinity, alignment: .top)
